@@ -102,7 +102,7 @@ class ManagerUsersView(viewsets.ViewSet):
             user = get_object_or_404(User,username=username)
             managers = Group.objects.get(name='Manager')
             managers.user_set.add(user)
-            return Response({'message':'ok'},status.HTTP_200_OK)
+            return Response({'message':'ok'},status.HTTP_201_CREATED)
         
         return Response({"message":"error"},status.HTTP_400_BAD_REQUEST)
 
@@ -119,3 +119,47 @@ class ManagerUsersView(viewsets.ViewSet):
         
         except Group.DoesNotExist:
             return({'message':'Manager Group not Found'},status.HTTP_404_NOT_FOUND)
+
+class DeliveryUsersView(viewsets.ViewSet):
+    permission_classes = [IsAdminUser]
+    
+    def list(self,request):
+        """
+        GET method to list all Users in Manager Group.
+        """
+        try:
+            delivery_group = Group.objects.get(name='delivery_crew')
+            delivery_users = User.objects.filter(groups=delivery_group)
+            serializer = UserSerializer(delivery_users,many=True)
+            return Response(serializer.data,status.HTTP_200_OK)
+        
+        except Group.DoesNotExist:
+            return Response({'error': 'Delivery Crew group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    def create(self,request):
+        """
+        POST method to create a new manager
+        """
+        username = request.data['username']
+        if username:
+            user = get_object_or_404(User,username=username)
+            delivery_crew = Group.objects.get(name='delivery_crew')
+            delivery_crew.user_set.add(user)
+            return Response({'message':'ok'},status.HTTP_201_CREATED)
+        
+        return Response({"message":"error"},status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        """
+        DELETE method to remove a menu item
+        """
+        try:
+            delivery_group = Group.objects.get(name='delivery_crew')
+            delivery_user = User.objects.filter(groups=delivery_group)
+            delivery_user_n = get_object_or_404(delivery_user,pk=pk)
+            delivery_user_n.delete()
+            return Response({'message':'Ok'},status.HTTP_204_NO_CONTENT)
+        
+        except Group.DoesNotExist:
+            return({'message':'Delivery Group not Found'},status.HTTP_404_NOT_FOUND)
+                
