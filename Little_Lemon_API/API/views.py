@@ -1,7 +1,7 @@
 from django.shortcuts import render,get_object_or_404
 from rest_framework import viewsets, status
-from .models import MenuItem
-from .serializers import MenuItemSerializer,UserSerializer
+from .models import MenuItem,Cart
+from .serializers import MenuItemSerializer,UserSerializer, CartSerializer
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from django.contrib.auth.models import User,Group
@@ -162,4 +162,41 @@ class DeliveryUsersView(viewsets.ViewSet):
         
         except Group.DoesNotExist:
             return({'message':'Delivery Group not Found'},status.HTTP_404_NOT_FOUND)
+
+class CartManagementView(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        """
+        GET method to list all the items in cart
+        """
+        queryset = Cart.objects.filter(user=request.user)
+        serializer = CartSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def create(self, request):
+        """
+        POST method to add Menu item to the cart
+        """
+        
+        serializer = CartSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save(user=self.request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, pk=None):
+        """
+        DELETE all Menu items created by current user
+        """
+        try:
+            delivery_user_n = Cart.objects.filter(user=request.user)
+            delivery_user_n.delete()
+            return Response({'message':'Ok'},status.HTTP_204_NO_CONTENT)
+        
+        except Cart.DoesNotExist:
+            return({'message':'Delivery Group not Found'},status.HTTP_404_NOT_FOUND)    
+    
+        
                 
