@@ -232,6 +232,24 @@ class OrderManagementView(viewsets.ViewSet):
         # Return any validation errors
         return Response({"message":"Your order has been placed."}, status=status.HTTP_201_CREATED)
 
+    def retrieve(self, request, pk=None):
+        """
+        GET method to get a list of order items for a single order for the same user.
+        If the `pk` does not belong to the user's order, throw an error.
+        """
+        # Retrieve the order for the authenticated user and the given pk
+        order = get_object_or_404(Order, pk=pk, user=request.user)
+    
+        # Retrieve all items associated with the order
+        order_items = OrderItem.objects.filter(order=order)
+
+        # Serialize the order items (many=True as it's a list of items)
+        serializer = OrderItemSerializer(order_items, many=True)
+    
+        # Return the serialized data with an HTTP 200 OK response
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
     def calculate_total(self, cart_items):
         total = Decimal(0)
         for item in cart_items:
