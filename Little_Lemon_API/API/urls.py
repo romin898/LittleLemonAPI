@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path,include
-from .views import MenuItemsView,ManagerUsersView,DeliveryUsersView,CartManagementView
+from .views import MenuItemsView,ManagerUsersView,DeliveryUsersView,CartManagementView,OrderManagementView
 
 
 urlpatterns = [
@@ -10,5 +10,6 @@ urlpatterns = [
     path('groups/manager/users/<int:pk>',ManagerUsersView.as_view({'delete':'destroy'})),
     path('groups/delivery-crews/users',DeliveryUsersView.as_view({'get':'list','post':'create'})),
     path('groups/delivery-crews/users/<int:pk>',DeliveryUsersView.as_view({'delete':'destroy'})),
-    path('cart/menu-items',CartManagementView.as_view({'get':'list','post':'create','delete':'destroy'}))
+    path('cart/menu-items',CartManagementView.as_view({'get':'list','post':'create','delete':'destroy'})),
+    path('orders',OrderManagementView.as_view({'get':'list','post':'create'})),
 ]

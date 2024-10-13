@@ -1,10 +1,12 @@
 from django.shortcuts import render,get_object_or_404
 from rest_framework import viewsets, status
-from .models import MenuItem,Cart
-from .serializers import MenuItemSerializer,UserSerializer, CartSerializer
+from .models import MenuItem,Cart,Order,OrderItem
+from .serializers import MenuItemSerializer,UserSerializer, CartSerializer,OrderSerializer,OrderItemSerializer
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from django.contrib.auth.models import User,Group
+from decimal import Decimal
+from datetime import date
 
 # Create your views here.
 class MenuItemsView(viewsets.ViewSet):
@@ -197,6 +199,46 @@ class CartManagementView(viewsets.ViewSet):
         
         except Cart.DoesNotExist:
             return({'message':'Delivery Group not Found'},status.HTTP_404_NOT_FOUND)    
-    
+
+class OrderManagementView(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+    def list(self,request):            
+        """
+        GET method to list all the items in order for the user
+        """
+        order = Order.objects.filter(user=request.user)
+        queryset = OrderItem.objects.filter(order__in=order)
+        serializer = OrderItemSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def create(self, request):
+        """
+        POST method to create a new order for current customer which would get current cart items
+        from the cart endpoint and add those items to the order items table, then deletes
+        all items from the cart for this user.    
+        """
+        # Retrieve all cart items for the current user
+        cart_items = Cart.objects.filter(user=self.request.user)
+        total = self.calculate_total(cart_items)
+        order = Order.objects.create(user=request.user,status=False,total=total,date=date.today())
+        # Serialize cart items with 'many=True' since cart_items is a QuerySet
         
-                
+        for i in cart_items.values():
+            menu_item = get_object_or_404(MenuItem,id=i['menuitem_id'])
+            order_item = OrderItem.objects.create(order=order,menuitem=menu_item,quantity=i['quantity'])
+            order_item.save()
+        cart_items.delete()
+
+        # Return any validation errors
+        return Response({"message":"Your order has been placed."}, status=status.HTTP_201_CREATED)
+
+    def calculate_total(self, cart_items):
+        total = Decimal(0)
+        for item in cart_items:
+            total += item.price
+        return total
+
+
+
+
+
