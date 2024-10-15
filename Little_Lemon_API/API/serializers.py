@@ -30,3 +30,13 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['username']
+
+class OrderPutSerializer(serializers.ModelSerializer):
+    class Meta():
+        model = Order
+        fields = ['delivery_crew','status']
+
+class OrderPutSerializerDelivery(serializers.ModelSerializer):
+    class Meta():
+        model = Order
+        fields = ['status']        

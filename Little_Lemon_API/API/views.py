@@ -1,7 +1,8 @@
 from django.shortcuts import render,get_object_or_404
 from rest_framework import viewsets, status
 from .models import MenuItem,Cart,Order,OrderItem
-from .serializers import MenuItemSerializer,UserSerializer, CartSerializer,OrderSerializer,OrderItemSerializer
+from .serializers import MenuItemSerializer,UserSerializer, CartSerializer,OrderPutSerializer,OrderItemSerializer,OrderSerializer,\
+OrderPutSerializerDelivery
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from django.contrib.auth.models import User,Group
@@ -206,10 +207,22 @@ class OrderManagementView(viewsets.ViewSet):
         """
         GET method to list all the items in order for the user
         """
-        order = Order.objects.filter(user=request.user)
-        queryset = OrderItem.objects.filter(order__in=order)
-        serializer = OrderItemSerializer(queryset, many=True)
-        return Response(serializer.data)
+        if request.user.groups.filter(name='Manager').exists():
+            queryset = OrderItem.objects.all()
+            serializer = OrderItemSerializer(queryset,many=True)
+            return Response(serializer.data)
+        
+        elif request.user.groups.filter(name='delivery_crew').exists():
+            order = Order.objects.filter(delivery_crew= self.request.user)
+            # can use this if want to list all filtered order queryset = OrderItem.objects.filter(order_id__in=order)
+            serializer = OrderSerializer(order,many=True)
+            return Response(serializer.data)
+        
+        else:
+            order = Order.objects.filter(user=request.user)
+            queryset = OrderItem.objects.filter(order__in=order)
+            serializer = OrderItemSerializer(queryset, many=True)
+            return Response(serializer.data)
 
     def create(self, request):
         """
@@ -234,22 +247,62 @@ class OrderManagementView(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         """
-        GET method to get a list of order items for a single order for the same user.
-        If the `pk` does not belong to the user's order, throw an error.
+        GET method to get a single order for the same user. 
+        If the order_id does not belong to the user, throw an error.
         """
-        # Retrieve the order for the authenticated user and the given pk
-        order = get_object_or_404(Order, pk=pk, user=request.user)
-    
-        # Retrieve all items associated with the order
+        # Fetch the order associated with the user
+        order = get_object_or_404(Order.objects.filter(user=request.user), pk=pk)
+
+        # Fetch the order items related to the order
         order_items = OrderItem.objects.filter(order=order)
 
-        # Serialize the order items (many=True as it's a list of items)
-        serializer = OrderItemSerializer(order_items, many=True)
-    
-        # Return the serialized data with an HTTP 200 OK response
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        if order_items.exists():
+            # Serialize the order items if they exist
+            serializer = OrderItemSerializer(order_items, many=True)
+            return Response(serializer.data, status=200)  # HTTP 200 OK
+        else:
+            # If no order items are found, return a suitable message
+            return Response({"detail": "No items found for this order."}, status=404)
 
+    def partial_update(self, request, pk=None):
+        """
+        PATCH method to partially update an existing Order
+        """
+        if request.user.groups.filter(name='Manager').exists():
+            serialized_item = OrderPutSerializer(data=request.data)
+            serialized_item.is_valid(raise_exception=True)
+            crew_pk = request.data.get('delivery_crew',None)
+            status = request.data.get('status',None)
+            order = get_object_or_404(Order, pk=pk)  # Fetch the specific menu item
+            crew = get_object_or_404(User, pk=crew_pk)
+            order.delivery_crew = crew
+            order.status = status
+            order.save()
+            return Response(status=201, data={'message':str(crew.username)+' was assigned to order #'+str(order.id)})
+        
+        if request.user.groups.filter(name='delivery_crew').exists():
+            order = get_object_or_404(Order.objects.filter(delivery_crew= self.request.user,pk=pk))
+            serialized_item = OrderPutSerializerDelivery(order,data=request.data)
+            serialized_item.is_valid(raise_exception=True)
+            status = request.data.get('status',None)
+            order.status = status
+            order.save()
+            return Response(status=201, data={'message':'The order status has been changed'})
 
+        return Response({'message': 'You are not authorized'}, status=status.HTTP_403_FORBIDDEN)
+
+    def destroy(self,request,pk=None):
+        """
+        DELETE method to delete an existing Order.
+        """
+        if request.user.groups.filter(name='Manager').exists():
+            try:
+                order=get_object_or_404(Order,pk=pk)
+                order.delete()
+                return Response({"message":"OK"},status.HTTP_204_NO_CONTENT)
+            except Order.DoesNotExist:
+                return({'message':'Order not Found'},status.HTTP_404_NOT_FOUND)
+            
     def calculate_total(self, cart_items):
         total = Decimal(0)
         for item in cart_items:

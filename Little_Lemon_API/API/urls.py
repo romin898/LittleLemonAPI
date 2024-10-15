@@ -11,5 +11,5 @@ urlpatterns = [
     path('groups/delivery-crews/users/<int:pk>',DeliveryUsersView.as_view({'delete':'destroy'})),
     path('cart/menu-items',CartManagementView.as_view({'get':'list','post':'create','delete':'destroy'})),
     path('orders',OrderManagementView.as_view({'get':'list','post':'create'})),
-    path('orders/<int:pk>',OrderManagementView.as_view({'get':'retrieve'})),
+    path('orders/<int:pk>',OrderManagementView.as_view({'get':'retrieve','patch':'partial_update','delete':'destroy'})),
 ]
