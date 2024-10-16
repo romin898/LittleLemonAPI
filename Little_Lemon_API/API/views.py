@@ -8,18 +8,42 @@ from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from django.contrib.auth.models import User,Group
 from decimal import Decimal
 from datetime import date
+from django.core.paginator import Paginator, EmptyPage
+from rest_framework.throttling import AnonRateThrottle,UserRateThrottle
 
 # Create your views here.
 class MenuItemsView(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
-
+    throtling_classes = [UserRateThrottle]
     def list(self, request):
         """
         GET method to list all menu items
         """
-        queryset = MenuItem.objects.all()
+        queryset = MenuItem.objects.select_related('category').all()
+        category_name = request.query_params.get('category')
+        price = request.query_params.get('price')
+        search = request.query_params.get('search')
+        ordering = request.query_params.get('ordering')
+        perpage = request.query_params.get('perpage',default=2)
+        page = request.query_params.get('page',default=1)
+        if category_name:
+            queryset = queryset.filter(category__title__iexact=category_name)
+        if price:
+            queryset = queryset.filter(price__lte=price)
+        if search:
+            queryset = queryset.filter(title__icontains=search)
+        if ordering:
+            ordering_fields = ordering.split(',')
+            queryset = queryset.order_by(*ordering_fields)
+        paginator = Paginator(queryset,per_page=perpage)
+        try:
+            queryset = paginator.page(number=page)
+        except EmptyPage:
+            queryset=[]    
+
         serializer = MenuItemSerializer(queryset, many=True)
         return Response(serializer.data)
+    
 
     def retrieve(self, request, pk=None):
         """
@@ -28,6 +52,7 @@ class MenuItemsView(viewsets.ViewSet):
         menu_item = get_object_or_404(MenuItem, pk=pk)
         serializer = MenuItemSerializer(menu_item)
         return Response(serializer.data)
+
 
     def create(self, request):
         """
@@ -41,7 +66,8 @@ class MenuItemsView(viewsets.ViewSet):
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'You are not authorized'}, status=status.HTTP_403_FORBIDDEN)
-
+    
+    
     def update(self, request, pk=None):
         """
         PUT method to update an existing menu item
@@ -56,6 +82,7 @@ class MenuItemsView(viewsets.ViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'You are not authorized'}, status=status.HTTP_403_FORBIDDEN)
 
+    
     def partial_update(self, request, pk=None):
         """
         PATCH method to partially update an existing menu item
@@ -69,6 +96,7 @@ class MenuItemsView(viewsets.ViewSet):
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'You are not authorized'}, status=status.HTTP_403_FORBIDDEN)
+
 
     def destroy(self, request, pk=None):
         """
@@ -208,8 +236,30 @@ class OrderManagementView(viewsets.ViewSet):
         GET method to list all the items in order for the user
         """
         if request.user.groups.filter(name='Manager').exists():
-            queryset = OrderItem.objects.all()
-            serializer = OrderItemSerializer(queryset,many=True)
+            queryset = Order.objects.select_related('delivery_crew').all()
+            delivery_crew = request.query_params.get('delivery_crew')
+            status = request.query_params.get('status')
+            total = request.query_params.get('total')
+            search = request.query_params.get('search')
+            perpage = request.query_params.get('perpage',default=2)
+            page = request.query_params.get('page',default=1)
+            if delivery_crew:
+                queryset = queryset.filter(delivery_crew__username=delivery_crew)
+            if status:
+                queryset = queryset.filter(status=status)
+            if search:
+                queryset = queryset.filter(delivery_crew__username__icontains=search)
+            if total:
+                queryset = queryset.filter(total__lte=total)
+
+            paginator = Paginator(queryset,per_page=perpage)
+
+            try:
+                queryset = paginator.page(number=page)
+            except EmptyPage:
+                queryset = []
+                                        
+            serializer = OrderSerializer(queryset,many=True)
             return Response(serializer.data)
         
         elif request.user.groups.filter(name='delivery_crew').exists():
